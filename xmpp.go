@@ -1,5 +1,4 @@
-// Package xmpp implements the XMPP IM protocol, as specified in RFC 6120 and
-// 6121
+// Package xmpp implements the XMPP IM protocol, as specified in RFC 6120 and 6121.
 package xmpp
 
 import (
@@ -200,7 +199,15 @@ func (c *Conn) SendPresence(to, typ, id string) error {
 	if len(id) == 0 {
 		id = strconv.FormatUint(uint64(c.getCookie()), 10)
 	}
-	_, err := fmt.Fprintf(c.out, "<presence id='%s' to='%s' type='%s'/>", xmlEscape(id), xmlEscape(to), xmlEscape(typ))
+	_, err := fmt.Fprintf(c.out, "<presence from='%s' id='%s' to='%s' type='%s'/>", xmlEscape(c.jid), xmlEscape(id), xmlEscape(to), xmlEscape(typ))
+	return err
+}
+
+func (c *Conn) SendPresenceRoom(to, id string) error {
+	if len(id) == 0 {
+		id = strconv.FormatUint(uint64(c.getCookie()), 10)
+	}
+	_, err := fmt.Fprintf(c.out, "<presence from='%s' id='%s' to='%s'/>", xmlEscape(c.jid), xmlEscape(id), xmlEscape(to))
 	return err
 }
 
@@ -320,7 +327,7 @@ type Config struct {
 
 // Dial creates a new connection to an XMPP server and authenticates as the
 // given user.
-func Dial(address, user, domain, password string, config *Config) (c *Conn, err error) {
+func Dial(address, user, domain, password, resource string, config *Config) (c *Conn, err error) {
 	c = new(Conn)
 	c.inflights = make(map[Cookie]chan<- Stanza)
 
@@ -440,7 +447,8 @@ func Dial(address, user, domain, password string, config *Config) (c *Conn, err 
 	}
 
 	// Send IQ message asking to bind to the local user name.
-	fmt.Fprintf(c.out, "<iq type='set' id='bind_1'><bind xmlns='%s'/></iq>", nsBind)
+	fmt.Fprintf(c.out, "<iq type='set' id='bind_2'><bind xmlns='%s'><resource>%s</resource></bind></iq>", nsBind, resource)
+
 	var iq ClientIQ
 	if err = c.in.DecodeElement(&iq, nil); err != nil {
 		return nil, errors.New("unmarshal <iq>: " + err.Error())
@@ -597,11 +605,16 @@ type ClientMessage struct {
 	To      string   `xml:"to,attr"`
 	Type    string   `xml:"type,attr"` // chat, error, groupchat, headline, or normal
 
-	// These should technically be []clientText,
-	// but string is much more convenient.
-	Subject string `xml:"subject"`
-	Body    string `xml:"body"`
-	Thread  string `xml:"thread"`
+	Subject string  `xml:"subject"`
+	Body    string  `xml:"body"`
+	Thread  string  `xml:"thread"`
+	Delay   Delayed `xml:"delay"`
+}
+
+type Delayed struct {
+	Xmlns string `xml:"xmlns,attr"`
+	From  string `xml:"from,attr"`
+	Stamp string `xml:"stamp,attr"`
 }
 
 type ClientText struct {
@@ -663,9 +676,9 @@ func next(p *xml.Decoder) (xml.Name, interface{}, error) {
 	if err != nil {
 		return xml.Name{}, nil, err
 	}
-
 	// Put it in an interface and allocate one.
 	var nv interface{}
+
 	switch se.Name.Space + " " + se.Name.Local {
 	case nsStream + " features":
 		nv = &streamFeatures{}
