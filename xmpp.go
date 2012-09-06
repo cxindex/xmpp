@@ -1,5 +1,5 @@
 // Package xmpp implements the XMPP IM protocol, as specified in RFC 6120 and
-// 6121.
+// 6121
 package xmpp
 
 import (
