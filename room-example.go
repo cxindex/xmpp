@@ -2,8 +2,8 @@
 package main
 
 import (
-	"github.com/cxindex/xmpp"
 	"fmt"
+	"github.com/cxindex/xmpp"
 	"log"
 )
 
@@ -15,7 +15,7 @@ func main() {
 	}
 
 	//pop up in roster
-	if err := Conn.SignalPresence(""); err != nil { 
+	if err := Conn.SignalPresence(""); err != nil {
 		log.Fatal(err)
 	}
 
@@ -33,7 +33,9 @@ func main() {
 		case *xmpp.ClientMessage:
 			fmt.Println(got)
 		case *xmpp.ClientPresence:
-			//do something
+			Conn.SendRoom("ttyh@conference.jabber.ru", "Oh! I can smell a cave troll.")      //to chat
+			Conn.Send("ttyh@conference.jabber.ru/cx", "Oh! I can smell a cave troll.")       //to occupant
+			Conn.Send("cx.index@gmail.com", "Do not take me as a conjuror of cheap tricks!") //to jid
 		default:
 			//do something else
 		}
