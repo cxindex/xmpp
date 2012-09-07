@@ -193,6 +193,12 @@ func (c *Conn) Send(to, msg string) error {
 	return err
 }
 
+func (c *Conn) SendRoom(to, msg string) error {
+	id := strconv.FormatUint(uint64(c.getCookie()), 10)
+	_, err := fmt.Fprintf(c.out, "<message from='%s' id='%s' to='%s' type='groupchat'><body>%s</body></message>", xmlEscape(c.jid), xmlEscape(id), xmlEscape(to), xmlEscape(msg))
+	return err
+}
+
 // SendPresence sends a presence stanza. If id is empty, a unique id is
 // generated.
 func (c *Conn) SendPresence(to, typ, id string) error {
