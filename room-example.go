@@ -33,7 +33,7 @@ func main() {
 		case *xmpp.ClientMessage:
 			fmt.Println(got)
 		case *xmpp.ClientPresence:
-			Conn.SendRoom("ttyh@conference.jabber.ru", "Oh! I can smell a cave troll.")      //to chat
+			Conn.SendRoom("ttyh@conference.jabber.ru", "Oh! I can smell a cave troll.")      //to groupchat
 			Conn.Send("ttyh@conference.jabber.ru/cx", "Oh! I can smell a cave troll.")       //to occupant
 			Conn.Send("cx.index@gmail.com", "Do not take me as a conjuror of cheap tricks!") //to jid
 		default:
