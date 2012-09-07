@@ -217,8 +217,9 @@ func (c *Conn) SendPresenceRoom(to, id string) error {
 	return err
 }
 
-func (c *Conn) SignalPresence(state string) error {
-	_, err := fmt.Fprintf(c.out, "<presence><show>%s</show></presence>", xmlEscape(state))
+func (c *Conn) SignalPresence(state, status string, priority int) error {
+	_, err := fmt.Fprintf(c.out, "<presence><show>%s</show><status>%s</status><priority>%v</priority></presence>",
+		xmlEscape(state), xmlEscape(status), priority)
 	return err
 }
 
