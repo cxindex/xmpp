@@ -15,7 +15,7 @@ func main() {
 	}
 
 	//pop up in roster
-	if err := Conn.SignalPresence("dnd", "is there some food in this world?", 10); err != nil { //pop up in roster
+	if err := Conn.SignalPresence("dnd", "is there some food in this world?", 10); err != nil {
 		log.Fatal(err)
 	}
 
