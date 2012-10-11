@@ -1,5 +1,5 @@
-// Package xmpp implements the XMPP IM protocol, as specified in RFC 6120 and 6121.
-// forked from github.com/agl/xmpp
+// Package xmpp implements the XMPP IM protocol, as specified in RFC 6120 and
+// 6121.
 package xmpp
 
 import (
@@ -71,7 +71,7 @@ func (c *Conn) Next() (stanza Stanza, err error) {
 			return
 		}
 
-		if iq, ok := stanza.Value.(*ClientIQ); ok && iq.Type == "error" {
+		if iq, ok := stanza.Value.(*ClientIQ); ok && (iq.Type == "result" || iq.Type == "error") {
 			var cookieValue uint64
 			if cookieValue, err = strconv.ParseUint(iq.Id, 10, 64); err != nil {
 				err = errors.New("xmpp: failed to parse id from iq: " + err.Error())
@@ -162,14 +162,8 @@ func (c *Conn) SendIQ(to, typ string, value interface{}) (reply chan Stanza, coo
 		return
 	}
 	if _, ok := value.(EmptyReply); !ok {
-		if _, ok := value.(string); !ok {
-			if err = xml.NewEncoder(c.out).Encode(value); err != nil {
-				return
-			}
-		} else {
-			if _, err = fmt.Fprintf(c.out, value.(string)); err != nil {
-				return
-			}
+		if err = xml.NewEncoder(c.out).Encode(value); err != nil {
+			return
 		}
 	}
 	if _, err = fmt.Fprintf(c.out, "</iq>"); err != nil {
@@ -181,7 +175,6 @@ func (c *Conn) SendIQ(to, typ string, value interface{}) (reply chan Stanza, coo
 }
 
 // SendIQReply sends a reply to an IQ query.
-
 func (c *Conn) SendIQReply(to, typ, id string, value interface{}) error {
 	if _, err := fmt.Fprintf(c.out, "<iq to='%s' from='%s' type='%s' id='%s'>", xmlEscape(to), xmlEscape(c.jid), xmlEscape(typ), xmlEscape(id)); err != nil {
 		return err
@@ -196,50 +189,23 @@ func (c *Conn) SendIQReply(to, typ, id string, value interface{}) error {
 }
 
 // Send sends an IM message to the given user.
-func (c *Conn) Send(to, typ, msg string) error {
-	_, err := fmt.Fprintf(c.out, "<message to='%s' from='%s' type='%s'><body>%s</body></message>", xmlEscape(to), xmlEscape(c.jid), xmlEscape(typ), xmlEscape(msg))
-	return err
-}
-
-func (c *Conn) SetSubject(to, subject string) error {
-	id := strconv.FormatUint(uint64(c.getCookie()), 10)
-	_, err := fmt.Fprintf(c.out, "<message from='%s' id='%s' to='%s' type='groupchat'><subject>%s</subject></message>", xmlEscape(c.jid), xmlEscape(id), xmlEscape(to), xmlEscape(subject))
-	return err
-}
-
-//possible roles: none (kick), participant (voice), visitor (no-voice)
-func (c *Conn) ModUse(to, nick, role, reason string) error {
-	_, _, err := c.SendIQ(to, "set", ClientQuery{
-		Attr:  "http://jabber.org/protocol/muc#admin",
-		Query: []byte(fmt.Sprintf("<item nick='%s' role='%s'><reason>%s</reason></item>", xmlEscape(nick), xmlEscape(role), xmlEscape(reason))),
-	})
-	return err
-}
-
-//possible affiliations: owner, admin, member, outcast, none
-func (c *Conn) AdminUse(to, jid, affiliation, reason string) error {
-	_, _, err := c.SendIQ(to, "set", ClientQuery{
-		Attr:  "http://jabber.org/protocol/muc#admin",
-		Query: []byte(fmt.Sprintf("<item affiliation='%s' jid='%s'><reason>%s</reason></item>", xmlEscape(affiliation), xmlEscape(jid), xmlEscape(reason))),
-	})
+func (c *Conn) Send(to, msg string) error {
+	_, err := fmt.Fprintf(c.out, "<message to='%s' from='%s' type='chat'><body>%s</body></message>", xmlEscape(to), xmlEscape(c.jid), xmlEscape(msg))
 	return err
 }
 
 // SendPresence sends a presence stanza. If id is empty, a unique id is
 // generated.
-func (c *Conn) SendPresence(to, typ string) error {
-	id := strconv.FormatUint(uint64(c.getCookie()), 10)
-	var err error
-	if len(typ) == 0 { //room
-		_, err = fmt.Fprintf(c.out, "<presence from='%s' id='%s' to='%s'/>", xmlEscape(c.jid), xmlEscape(id), xmlEscape(to))
-	} else {
-		_, err = fmt.Fprintf(c.out, "<presence from='%s' id='%s' to='%s' type='%s'/>", xmlEscape(c.jid), xmlEscape(id), xmlEscape(to), xmlEscape(typ))
+func (c *Conn) SendPresence(to, typ, id string) error {
+	if len(id) == 0 {
+		id = strconv.FormatUint(uint64(c.getCookie()), 10)
 	}
+	_, err := fmt.Fprintf(c.out, "<presence id='%s' to='%s' type='%s'/>", xmlEscape(id), xmlEscape(to), xmlEscape(typ))
 	return err
 }
 
-func (c *Conn) SignalPresence(state, status string, priority int) error {
-	_, err := fmt.Fprintf(c.out, "<presence><show>%s</show><status>%s</status><priority>%v</priority></presence>", xmlEscape(state), xmlEscape(status), priority)
+func (c *Conn) SignalPresence(state string) error {
+	_, err := fmt.Fprintf(c.out, "<presence><show>%s</show></presence>", xmlEscape(state))
 	return err
 }
 
@@ -354,7 +320,7 @@ type Config struct {
 
 // Dial creates a new connection to an XMPP server and authenticates as the
 // given user.
-func Dial(address, user, domain, password, resource string, config *Config) (c *Conn, err error) {
+func Dial(address, user, domain, password string, config *Config) (c *Conn, err error) {
 	c = new(Conn)
 	c.inflights = make(map[Cookie]chan<- Stanza)
 
@@ -474,8 +440,7 @@ func Dial(address, user, domain, password, resource string, config *Config) (c *
 	}
 
 	// Send IQ message asking to bind to the local user name.
-	fmt.Fprintf(c.out, "<iq type='set' id='bind_2'><bind xmlns='%s'><resource>%s</resource></bind></iq>", nsBind, resource)
-
+	fmt.Fprintf(c.out, "<iq type='set' id='bind_1'><bind xmlns='%s'/></iq>", nsBind)
 	var iq ClientIQ
 	if err = c.in.DecodeElement(&iq, nil); err != nil {
 		return nil, errors.New("unmarshal <iq>: " + err.Error())
@@ -632,16 +597,11 @@ type ClientMessage struct {
 	To      string   `xml:"to,attr"`
 	Type    string   `xml:"type,attr"` // chat, error, groupchat, headline, or normal
 
-	Subject string  `xml:"subject"`
-	Body    string  `xml:"body"`
-	Thread  string  `xml:"thread"`
-	Delay   Delayed `xml:"delay"`
-}
-
-type Delayed struct {
-	Xmlns string `xml:"xmlns,attr"`
-	From  string `xml:"from,attr"`
-	Stamp string `xml:"stamp,attr"`
+	// These should technically be []clientText,
+	// but string is much more convenient.
+	Subject string `xml:"subject"`
+	Body    string `xml:"body"`
+	Thread  string `xml:"thread"`
 }
 
 type ClientText struct {
@@ -661,32 +621,17 @@ type ClientPresence struct {
 	Status   string       `xml:"status"` // sb []clientText
 	Priority string       `xml:"priority"`
 	Error    *ClientError `xml:"error"`
-	Item     Item         `xml:"x>item"`
 }
-
 
 type ClientIQ struct { // info/query
-	XMLName xml.Name `xml:"jabber:client iq"`
-	From    string   `xml:"from,attr"`
-	Id      string   `xml:"id,attr"`
-	To      string   `xml:"to,attr"`
-	Type    string   `xml:"type,attr"` // error, get, result, set
-
-	Query []byte      `xml:",innerxml"`
-	Error ClientError `xml:"error"`
-	Bind  bindBind    `xml:"bind"`
-}
-
-type ClientQuery struct { //just clear query to send
-	XMLName xml.Name `xml:"query"`
-	Attr    string   `xml:"xmlns,attr"`
-	Query   []byte   `xml:",innerxml"`
-}
-
-type Item struct {
-	Nick        string `xml:"nick,attr,omitempty"`
-	Affiliation string `xml:"affiliation,attr,omitempty"`
-	Role        string `xml:"role,attr,omitempty"`
+	XMLName xml.Name    `xml:"jabber:client iq"`
+	From    string      `xml:"from,attr"`
+	Id      string      `xml:"id,attr"`
+	To      string      `xml:"to,attr"`
+	Type    string      `xml:"type,attr"` // error, get, result, set
+	Error   ClientError `xml:"error"`
+	Bind    bindBind    `xml:"bind"`
+	Query   []byte      `xml:",innerxml"`
 }
 
 type ClientError struct {
@@ -718,9 +663,9 @@ func next(p *xml.Decoder) (xml.Name, interface{}, error) {
 	if err != nil {
 		return xml.Name{}, nil, err
 	}
+
 	// Put it in an interface and allocate one.
 	var nv interface{}
-
 	switch se.Name.Space + " " + se.Name.Local {
 	case nsStream + " features":
 		nv = &streamFeatures{}
