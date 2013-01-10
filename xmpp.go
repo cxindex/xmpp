@@ -351,6 +351,8 @@ type Config struct {
 	// TrustedAddress, if true, means that the address passed to Dial is
 	// trusted and that certificates for that name should be accepted.
 	TrustedAddress bool
+	// Skip TLS encryption
+	SkipTLS bool
 }
 
 // Dial creates a new connection to an XMPP server and authenticates as the
@@ -402,17 +404,22 @@ func Dial(address, user, domain, password, resource string, config *Config) (c *
 		io.WriteString(log, "Starting TLS handshake\n")
 	}
 
-	tlsConn := tls.Client(conn, nil)
+	var tlsConn *tls.Conn
+	if config.SkipTLS {
+		tlsConn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
+	} else {
+		tlsConn = tls.Client(conn, nil)
+	}
 	if err := tlsConn.Handshake(); err != nil {
 		return nil, err
 	}
 
 	tlsState := tlsConn.ConnectionState()
-	if len(tlsState.VerifiedChains) == 0 {
+	if len(tlsState.VerifiedChains) == 0 && !config.SkipTLS {
 		return nil, errors.New("xmpp: failed to verify TLS certificate")
 	}
 
-	if log != nil {
+	if log != nil && !config.SkipTLS {
 		for i, cert := range tlsState.VerifiedChains[0] {
 			fmt.Fprintf(log, "  certificate %d: %s\n", i, certName(cert))
 		}
@@ -497,7 +504,6 @@ func Dial(address, user, domain, password, resource string, config *Config) (c *
 			return nil, errors.New("xmpp: session establishment failed")
 		}
 	}
-
 	return c, nil
 }
 
