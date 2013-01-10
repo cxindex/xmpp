@@ -405,7 +405,7 @@ func Dial(address, user, domain, password, resource string, config *Config) (c *
 	}
 
 	var tlsConn *tls.Conn
-	if config.SkipTLS {
+	if config != nil && config.SkipTLS {
 		tlsConn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 	} else {
 		tlsConn = tls.Client(conn, nil)
@@ -670,7 +670,6 @@ type ClientPresence struct {
 	Error    *ClientError `xml:"error"`
 	Item     Item         `xml:"x>item"`
 }
-
 
 type ClientIQ struct { // info/query
 	XMLName xml.Name `xml:"jabber:client iq"`
